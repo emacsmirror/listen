@@ -974,6 +974,26 @@ This is defined with `bindat-type' and uses the newer `bindat'
 types, without using `eval'.  It decodes more of the values
 natively.")
 
+(defvar listen-info-ffprobe-p (executable-find "ffprobe")
+  "Whether the \"ffprobe\" utility is available.")
+
+(defun listen-info-duration (filename)
+  "Return duration of FILENAME in seconds.
+Or nil if the duration can't be determined."
+  (pcase (file-name-extension filename)
+    ((or "ogg" "vorbis")
+     (listen-info--ogg-duration filename))
+    (_ (when listen-info-ffprobe-p
+         (with-demoted-errors "Unable to get duration for %S"
+           (with-temp-buffer
+             ;; NOTE: This works, but it is very slow to get even 32
+             ;; tracks' durations by calling it sequentially.
+             (call-process "ffprobe" nil t nil
+                           "-v" "quiet" "-print_format" "compact=print_section=0:nokey=1:escape=csv"
+                           "-show_entries" "format=duration" filename)
+             (goto-char (point-min))
+             (read (current-buffer))))))))
+
 (defun listen-info--ogg-duration (filename)
   "Return duration of FILENAME in seconds.
 FILENAME should be that of an Ogg Vorbis or Opus file."

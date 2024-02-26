@@ -93,6 +93,11 @@
                  (list :name "#" :primary 'descend
                        :getter (lambda (track _table)
                                  (cl-position track (listen-queue-tracks queue))))
+                 (list :name "Duration"
+                       :getter (lambda (track _table)
+                                 (or (when-let ((seconds (listen-track-duration track)))
+                                       (format-seconds "%h:%z%.2m:%.2s" seconds))
+                                     "")))
                  (list :name "Artist" :max-width 20 :align 'right
                        :getter (lambda (track _table)
                                  (propertize (or (listen-track-artist track) "")
@@ -331,7 +336,8 @@ buffer's queue."
      :album (map-elt metadata "album")
      :number (map-elt metadata "tracknumber")
      :date (map-elt metadata "date")
-     :genre (map-elt metadata "genre"))))
+     :genre (map-elt metadata "genre")
+     :duration (listen-info-duration filename))))
 
 (defun listen-queue-shuffle (queue)
   "Shuffle QUEUE."

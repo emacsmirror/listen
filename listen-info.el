@@ -948,6 +948,56 @@ Return one of symbols `vorbis', `opus', `flac', or `mp3'."
           ((string-match "\\.mp3$" filename) 'mp3)
           (t nil))))
 
+;;;; Track duration
+
+;; This section is a WIP.
+
+(defconst listen-info--ogg-page-bindat-spec*
+  (bindat-type
+    (capture-pattern str 4)
+    (_ unit (unless (equal capture-pattern "OggS")
+              (error "Ogg framing mismatch: expected `%s', got `%s'"
+                     "OggS" capture-pattern)))
+    (stream-structure-version uint 8 t)
+    (_ unit (unless (equal stream-structure-version 0)
+              (error "Ogg version mismatch: expected 0, got %s"
+                     stream-structure-version)))
+    (header-type-flag uint 8 t)
+    (granule-position uint 64 t)
+    (stream-serial-number uint 32 t)
+    (page-sequence-no uint 32 t)
+    (page-checksum uint 32 t)
+    (page-segments uint 8 t)
+    (segment-table vec page-segments))
+  "Ogg page structure specification.
+This is defined with `bindat-type' and uses the newer `bindat'
+types, without using `eval'.  It decodes more of the values
+natively.")
+
+(defun listen-info--ogg-duration (filename)
+  "Return duration of FILENAME in seconds.
+FILENAME should be that of an Ogg Vorbis or Opus file."
+  ;; FIXME: This means decoding the file a second time to get the duration.
+  (let* ((type (pcase-exhaustive (file-name-extension filename)
+                 ("ogg" 'vorbis)
+                 ("opus" 'opus)))
+         (sample-rate-field (pcase type
+                              ('vorbis 'audio-sample-rate)
+                              ('opus 'sample-rate)))
+         (packets (listen-info--decode-ogg-packets filename 2))
+         (headers (listen-info--decode-ogg-headers packets type))
+         (sample-rate (bindat-get-field headers 'identification-header sample-rate-field))
+         num-samples)
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (insert-file-contents-literally filename)
+      (goto-char (point-max))
+      (re-search-backward "OggS")
+      (setf num-samples (bindat-get-field (bindat-unpack listen-info--ogg-page-bindat-spec*
+                                                         (buffer-substring (point) (point-max)))
+                                          'granule-position)))
+    (/ num-samples sample-rate)))
+
 (provide 'listen-info)
 
 ;;; listen-info.el ends here
